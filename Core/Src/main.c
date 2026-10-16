@@ -42,10 +42,49 @@ int __io_putchar(int ch)
 }
 /* USER CODE END 0 */
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
+#include "main.h"
+#include "app_config.h"
+#include "keypad.h"
+#include "password.h"
+#include "servo.h"
+#include "buzzer.h"
+#include "rfid.h"
+#include <stdio.h>
+/* USER CODE END Includes */
+
+/* Private variables */
+I2C_HandleTypeDef  hi2c1;
+SPI_HandleTypeDef  hspi1;
+TIM_HandleTypeDef  htim3;
+UART_HandleTypeDef huart2;
+
+/* USER CODE BEGIN PV */
+#ifndef Buzzer_Pin
+    #define Buzzer_Pin          GPIO_PIN_14
+    #define Buzzer_GPIO_Port    GPIOC
+#endif
+/* USER CODE END PV */
+
+/* Prototype */
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_SPI1_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_USART2_UART_Init(void);
+
+/* USER CODE BEGIN PFP */
+int __io_putchar(int ch);
+/* USER CODE END PFP */
+
+/* USER CODE BEGIN 0 */
+int __io_putchar(int ch)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 100);
+    return ch;
+}
+/* USER CODE END 0 */
+
 int main(void)
 {
     HAL_Init();
@@ -61,19 +100,8 @@ int main(void)
     Door_Close();
     Buzzer_Off();
     Password_LoadFlash();
+    RFID_Init();
 
-    Door_Open();
-    HAL_Delay(2000);
-    Door_Close();
-
-    Buzzer_On();
-    HAL_Delay(500);
-    Buzzer_Off();
-
-    /* USER CODE END 2 */
-
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
     while (1)
     {
         char key = Keypad_Scan();
@@ -90,7 +118,11 @@ int main(void)
             HAL_Delay(20);
         }
 
-        /* ===== Module 3: tự tắt còi ===== */
+        if (RFID_PollAdmin())
+        {
+            return 0;
+        }
+
         Buzzer_Update();
 
         /* USER CODE END WHILE */
@@ -238,9 +270,6 @@ static void MX_USART2_UART_Init(void)
     }
 }
 
-/**
-  * @brief GPIO Initialization Function
-  */
 static void MX_GPIO_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -258,6 +287,22 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    /* ===== RC522: CS (PA4) + RST (PB0) ===== */
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_4;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* ===== Keypad ===== */
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
@@ -280,6 +325,7 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
+
 
 /**
   * @brief  This function is executed in case of error occurrence.
